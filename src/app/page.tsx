@@ -79,7 +79,7 @@ export default function BasePage() {
               <Bell className="w-5 h-5 text-gray-600" />
             </button>
             <button className="w-8 h-8 rounded-full bg-gray-700 text-white flex items-center justify-center">
-              {session?.user?.name?.[1]?.toLocaleUpperCase() || 'U'}
+              {session?.user?.name?.[1]?.toLocaleUpperCase() ?? 'U'}
             </button>
           </div>
         </div>

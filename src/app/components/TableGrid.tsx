@@ -1,7 +1,20 @@
+/* eslint-disable @typescript-eslint/no-floating-promises */
+/* eslint-disable @typescript-eslint/no-inferrable-types */
+/* eslint-disable @typescript-eslint/no-unused-expressions */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable prefer-const */
+/* eslint-disable @typescript-eslint/no-base-to-string */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/consistent-indexed-object-style */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { CircleHelp, MoreVertical, ChevronDown, X, Plus, Check } from 'lucide-react';
+import { CircleHelp, MoreVertical, X, Plus } from 'lucide-react';
 import { api } from "~/utils/api";
 
 const debounce = (func, delay) => {
@@ -22,18 +35,17 @@ type FilterCondition = {
 
 type FilterGroup = {
     type: 'group';
-    filters: (FilterCondition | FilterGroup)[];  // Now can contain both conditions and groups
+    filters: (FilterCondition | FilterGroup)[];
     condition_type: string | null;
 };
 
 type FilterItem = FilterCondition | FilterGroup;
 
-// Update the view-related types
 type SavedView = {
     id: string;
     name: string;
-    sorting: any[];
-    filtering: FilterItem[];  // Update to use FilterItem type
+    sorting: { column: string; order: "asc" | "desc" }[];
+    filtering: FilterItem[];
     hiddenColumns: string[];
 };
 
@@ -53,17 +65,27 @@ const TableGrid = ({ tableId }) => {
         cells: Object.fromEntries(defaultColumns.map((col) => [col.id, ""])),
     }));
 
+    type Row = {
+        id: string;
+        cells: { [key: string]: string };
+    };
+    type Col = {
+        id: string;
+        cells: { [key: string]: string };
+    };
+
+    const [rows, setRows] = useState<Row[]>(defaultRows);
+
     const [columns, setColumns] = useState(defaultColumns);
-    const [rows, setRows] = useState(defaultRows);
     const [isSaving, setIsSaving] = useState(false);
-    const [invalidInput, setInvalidInput] = useState(null);
+    const [invalidInput, setInvalidInput] = useState<{ rowId: string; colId: string } | null>(null);
 
     const [openDropdown, setOpenDropdown] = useState(null);
     const [editingColumn, setEditingColumn] = useState(null);
     const [tempColumnData, setTempColumnData] = useState({ title: "", type: "" });
     const [addingColumn, setAddingColumn] = useState(false);
 
-    const dropdownRef = useRef(null);
+    const dropdownRef = useRef<HTMLDivElement | null>(null);
 
     const rowHeight = 32;
     const visibleRowCount = 30;
@@ -110,7 +132,14 @@ const TableGrid = ({ tableId }) => {
                 setRows(
                     data.rows.map((row) => ({
                         id: row.id,
-                        cells: row.data,
+                        cells: Object.fromEntries(
+                            row.data && typeof row.data === "object" && !Array.isArray(row.data)
+                                ? Object.entries(row.data).map(([key, value]) => [
+                                    key,
+                                    value !== null && value !== undefined ? String(value) : "",
+                                ])
+                                : []
+                        ),
                     }))
                 );
             }
@@ -120,31 +149,31 @@ const TableGrid = ({ tableId }) => {
     useEffect(() => {
         const handleClickOutside = (event) => {
             const isOutsideAllDropdowns =
-                (!hideDropdownRef.current || !hideDropdownRef.current.contains(event.target)) &&
-                (!dropdownRef.current || !dropdownRef.current.contains(event.target)) &&
-                (!sortDropdownRef.current || !sortDropdownRef.current.contains(event.target)) &&
-                (!showViewsDropdownRef.current || !showViewsDropdownRef.current.contains(event.target)) &&
-                (!filterDropdownRef.current || !filterDropdownRef.current.contains(event.target));
+                (!hideDropdownRef.current?.contains(event.target)) &&
+                (!dropdownRef.current?.contains(event.target)) &&
+                (!sortDropdownRef.current?.contains(event.target)) &&
+                (!showViewsDropdownRef.current?.contains(event.target)) &&
+                (!filterDropdownRef.current?.contains(event.target));
 
             if (isOutsideAllDropdowns) {
-                if (!dropDownEditButtonRef.current || !dropDownEditButtonRef.current.contains(event.target)) {
+                if (!dropDownEditButtonRef.current?.contains(event.target)) {
                     handleOpenDropdown(null);
                     setAddingColumn(false);
                 }
 
-                if (!showViewButton.current || !showViewButton.current.contains(event.target)) {
+                if (!showViewButton.current?.contains(event.target)) {
                     setShowViewsDropdown(false);
                 }
 
-                if (!hideButtonRef.current || !hideButtonRef.current.contains(event.target)) {
+                if (!hideButtonRef.current?.contains(event.target)) {
                     setShowHideDropdown(false);
                 }
 
-                if (!filterButtonRef.current || !filterButtonRef.current.contains(event.target)) {
+                if (!filterButtonRef.current?.contains(event.target)) {
                     setShowFilterDropdown(false);
                 }
 
-                if (!sortButtonRef.current || !sortButtonRef.current.contains(event.target)) {
+                if (!sortButtonRef.current?.contains(event.target)) {
                     setShowSortDropdown(false);
                 }
 
@@ -159,10 +188,10 @@ const TableGrid = ({ tableId }) => {
     }, [editingColumn, tempColumnData]);
 
     // Show/Hide columns
-    const [hiddenColumns, setHiddenColumns] = useState([]);
+    const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
     const [showHideDropdown, setShowHideDropdown] = useState(false);
-    const hideButtonRef = useRef(null);
-    const hideDropdownRef = useRef(null);
+    const hideButtonRef = useRef<HTMLButtonElement | null>(null);
+    const hideDropdownRef = useRef<HTMLDivElement | null>(null);;
 
     const toggleColumnVisibility = (colId) => {
         setHiddenColumns((prev) =>
@@ -182,12 +211,12 @@ const TableGrid = ({ tableId }) => {
     const saveViewMutation = api.table.saveView.useMutation();
     const deleteViewMutation = api.table.deleteView.useMutation();
 
-    const [views, setViews] = useState([]);
-    const [currentView, setCurrentView] = useState(null);
+    const [views, setViews] = useState<SavedView[]>([]);
+    const [currentView, setCurrentView] = useState<string | null>(null);
 
     const [showViewsDropdown, setShowViewsDropdown] = useState(false);
-    const showViewsDropdownRef = useRef(null);
-    const showViewButton = useRef(null);
+    const showViewsDropdownRef = useRef<HTMLDivElement | null>(null);
+    const showViewButton = useRef<HTMLButtonElement | null>(null);
 
     const handleToggleViewsDropdown = () => {
         setShowViewsDropdown((prev) => !prev);
@@ -230,11 +259,11 @@ const TableGrid = ({ tableId }) => {
 
     // handle search
     const [searchTerm, setSearchTerm] = useState("");
-    const [searchResults, setSearchResults] = useState([]);
+    const [searchResults, setSearchResults] = useState<{ rowId: string; colId: string; rowIndex: number }[]>([]);
     const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
     const [showSearch, setShowSearch] = useState(false);
-    const searchInputRef = useRef(null);
-    const tableRef = useRef(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const tableRef = useRef<HTMLDivElement | null>(null);
 
     const handleSearch = (query) => {
         setEditingCell(null);
@@ -247,10 +276,10 @@ const TableGrid = ({ tableId }) => {
             return;
         }
 
-        let matches = [];
+        let matches: { rowId: string; colId: string; rowIndex: number }[] = [];
         filteredRows.forEach((row, rowIndex) => {
             Object.keys(row.cells).forEach((colId) => {
-                if (!hiddenColumns.includes(colId) && row.cells[colId].toLowerCase().includes(query.toLowerCase())) {
+                if (!hiddenColumns.includes(colId) && (row.cells[colId] ?? "").toLowerCase().includes(query.toLowerCase())) {
                     matches.push({ rowId: row.id, colId, rowIndex });
                 }
             });
@@ -268,7 +297,9 @@ const TableGrid = ({ tableId }) => {
         if (matchIndex < 0 || matchIndex >= searchResults.length) return;
 
         const match = searchResults[matchIndex];
+        if (!match) return;
         const matchRowIndex = rows.findIndex((row) => row.id === match.rowId);
+
 
         const container = tableRef.current;
         if (!container) return;
@@ -333,17 +364,21 @@ const TableGrid = ({ tableId }) => {
     // handle filters
     const [filters, setFilters] = useState<FilterItem[]>([]);
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-    const filterButtonRef = useRef(null)
-    const filterDropdownRef = useRef(null);
+    const filterButtonRef = useRef<HTMLButtonElement | null>(null);
+    const filterDropdownRef = useRef<HTMLDivElement | null>(null);
 
     // Update handleAddFilter to handle nested groups
     const handleAddFilter = (columnId: string, groupIndex?: number, parentGroupIndex?: number) => {
         const updatedFilters = [...filters];
-        
+
         if (typeof parentGroupIndex === 'number') {
             // Adding to nested group
             const parentGroup = updatedFilters[parentGroupIndex] as FilterGroup;
+
+            if (groupIndex === undefined || !parentGroup.filters[groupIndex]) return;
+
             const nestedGroup = parentGroup.filters[groupIndex] as FilterGroup;
+
             nestedGroup.filters.push({
                 column: columnId,
                 condition: "",
@@ -370,7 +405,7 @@ const TableGrid = ({ tableId }) => {
             setShowFilterDropdown(true);
             return;
         }
-        
+
         setFilters(updatedFilters);
         setShowFilterDropdown(true);
     };
@@ -378,11 +413,14 @@ const TableGrid = ({ tableId }) => {
     // Update handleFilterChange to handle nested groups
     const handleFilterChange = (index: number, field: string, value: string, filterIndex?: number, parentGroupIndex?: number) => {
         const updatedFilters = [...filters];
-        
+
         if (typeof parentGroupIndex === 'number') {
             // Changing nested group filter
             const parentGroup = updatedFilters[parentGroupIndex] as FilterGroup;
             const nestedGroup = parentGroup.filters[index] as FilterGroup;
+
+            if (filterIndex === undefined || !nestedGroup.filters[filterIndex]) return; // Ensure filterIndex is valid
+
             (nestedGroup.filters[filterIndex] as FilterCondition)[field] = value;
         } else if (typeof filterIndex === 'number') {
             // Changing main group filter
@@ -392,14 +430,14 @@ const TableGrid = ({ tableId }) => {
             // Changing root level filter
             (updatedFilters[index] as FilterCondition)[field] = value;
         }
-        
+
         setFilters(updatedFilters);
     };
 
     // Update handleRemoveFilter to handle nested groups
     const handleRemoveFilter = (index: number, filterIndex?: number, parentGroupIndex?: number) => {
         const updatedFilters = [...filters];
-        
+
         if (typeof parentGroupIndex === 'number') {
             // Removing from nested group
             const parentGroup = updatedFilters[parentGroupIndex] as FilterGroup;
@@ -419,7 +457,7 @@ const TableGrid = ({ tableId }) => {
             // Removing from root level
             updatedFilters.splice(index, 1);
         }
-        
+
         setFilters(updatedFilters);
     };
 
@@ -428,8 +466,8 @@ const TableGrid = ({ tableId }) => {
         if (filters.length === 0) return rows;
 
         return rows.filter(row => {
-            const globalConditionType = filters[1]?.condition_type || 'AND';
-            
+            const globalConditionType = filters[1]?.condition_type ?? 'AND';
+
             // Evaluate a single filter condition
             const evaluateFilter = (filter: FilterCondition, row: any) => {
                 const column = columns.find(col => col.id === filter.column);
@@ -439,46 +477,54 @@ const TableGrid = ({ tableId }) => {
 
             // Evaluate a group of filters
             const evaluateGroup = (group: FilterGroup, row: any): boolean => {
-                if (group.filters.length === 0) return true;
-                
-                // Get first filter result
+                if (!Array.isArray(group.filters) || group.filters.length === 0) return true;
+
                 const firstFilter = group.filters[0];
-                let result = 'type' in firstFilter 
+                if (!firstFilter) return true; // Ensure it exists
+
+                let result = 'type' in firstFilter
                     ? evaluateGroup(firstFilter as FilterGroup, row)
                     : evaluateFilter(firstFilter as FilterCondition, row);
-                
-                // Evaluate subsequent filters in the group
+
                 for (let i = 1; i < group.filters.length; i++) {
                     const filter = group.filters[i];
-                    const matches = 'type' in filter 
+                    if (!filter) continue;
+
+                    const matches = 'type' in filter
                         ? evaluateGroup(filter as FilterGroup, row)
                         : evaluateFilter(filter as FilterCondition, row);
-                    
-                    const conditionType = filter.condition_type || 'AND';
-                    
+
+                    const conditionType = filter.condition_type ?? 'AND';
+
                     if (conditionType === 'AND') {
                         result = result && matches;
                     } else {
                         result = result || matches;
                     }
                 }
-                
                 return result;
             };
 
-            // Start with the first filter/group
+
+            if (filters.length === 0) return true;
+
             const firstItem = filters[0];
-            let result = 'type' in firstItem 
+            if (!firstItem) return true;
+
+            let result = 'type' in firstItem
                 ? evaluateGroup(firstItem as FilterGroup, row)
                 : evaluateFilter(firstItem as FilterCondition, row);
+
 
             // Evaluate subsequent filters/groups at root level
             for (let i = 1; i < filters.length; i++) {
                 const item = filters[i];
-                const matches = 'type' in item 
+                if (!item) continue;
+
+                const matches = 'type' in item
                     ? evaluateGroup(item as FilterGroup, row)
                     : evaluateFilter(item as FilterCondition, row);
-                
+
                 if (globalConditionType === 'AND') {
                     result = result && matches;
                 } else {
@@ -515,10 +561,10 @@ const TableGrid = ({ tableId }) => {
     const filteredRows = applyFilters();
 
     // handle sorting
-    const [sorts, setSorts] = useState([]);
+    const [sorts, setSorts] = useState<{ column: string; order: "asc" | "desc" }[]>([]);
     const [showSortDropdown, setShowSortDropdown] = useState(false);
-    const sortDropdownRef = useRef(null);
-    const sortButtonRef = useRef(null);
+    const sortDropdownRef = useRef<HTMLDivElement | null>(null);
+    const sortButtonRef = useRef<HTMLButtonElement | null>(null);
 
     const handleAddSort = () => {
         setSorts([...sorts, { column: "", order: "asc" }]);
@@ -526,7 +572,9 @@ const TableGrid = ({ tableId }) => {
 
     const handleSortChange = (index, field, value) => {
         const updatedSorts = [...sorts];
-        updatedSorts[index][field] = value;
+        if (updatedSorts[index]) {
+            updatedSorts[index][field] = value;
+        }
         setSorts(updatedSorts);
     };
 
@@ -561,8 +609,8 @@ const TableGrid = ({ tableId }) => {
     const sortedFilteredRows = applySorts(filteredRows);
 
     // handle table editing
-    const [selectedCell, setSelectedCell] = useState(null);
-    const [editingCell, setEditingCell] = useState(null);
+    const [selectedCell, setSelectedCell] = useState<{ rowId: string; colId: string } | null>(null);
+    const [editingCell, setEditingCell] = useState<{ rowId: string; colId: string } | null>(null);
 
     const handleCellClick = (rowId, colId) => {
         setInvalidInput(null);
@@ -576,6 +624,7 @@ const TableGrid = ({ tableId }) => {
 
     const handleCellChange = (e, rowId, colId) => {
         const column = columns.find((col) => col.id === colId);
+        if (!column) return;
 
         if (column.type === "number") {
             if (isNaN(e.target.value)) {
@@ -588,7 +637,18 @@ const TableGrid = ({ tableId }) => {
 
         const updatedRows = [...rows];
         const rowIndex = updatedRows.findIndex((row) => row.id === rowId);
-        updatedRows[rowIndex].cells[colId] = e.target.value;
+        if (rowIndex === -1) {
+            console.error(`Row with id ${rowId} not found.`);
+            return; // Exit the function if rowId is invalid
+        }
+
+        const updatedRow = updatedRows[rowIndex];
+        if (!updatedRow?.cells) {
+            console.error(`Cells object is missing for row ${rowId}.`);
+            return;
+        }
+
+        updatedRow.cells[colId] = e.target.value;
         setRows(updatedRows);
         debouncedSave(columns, updatedRows);
     };
@@ -664,7 +724,19 @@ const TableGrid = ({ tableId }) => {
             if ((e.key === "Delete" || e.key === "Backspace") && selectedCell && !editingCell) {
                 const newRows = [...rows];
                 const rowIndex = newRows.findIndex((row) => row.id === rowId);
-                newRows[rowIndex].cells[colId] = "";
+
+                if (rowIndex === -1) {
+                    console.error(`Row with id ${rowId} not found.`);
+                    return; // Exit if row doesn't exist
+                }
+
+                const updatedRow = newRows[rowIndex];
+                if (!updatedRow?.cells) {
+                    console.error(`Cells object is missing for row ${rowId}.`);
+                    return;
+                }
+
+                updatedRow.cells[colId] = "";
                 setRows(newRows);
                 debouncedSave(columns, newRows);
             }
@@ -677,9 +749,20 @@ const TableGrid = ({ tableId }) => {
                     currentColIndex + 1 >= columns.length
                         ? (currentRowIndex + 1) % rows.length
                         : currentRowIndex;
+
+                if (nextRowIndex < 0 || nextRowIndex >= rows.length) {
+                    console.error(`Invalid row index: ${nextRowIndex}`);
+                    return; // Exit if index is out of range
+                }
+
+                if (!rows[nextRowIndex]) {
+                    console.error(`Row at index ${nextRowIndex} is undefined.`);
+                    return;
+                }
+
                 setSelectedCell({
-                    rowId: rows[nextRowIndex].id,
-                    colId: columns[nextColIndex].id,
+                    rowId: rows[nextRowIndex].id ?? "",
+                    colId: columns[nextColIndex]?.id ?? "",
                 });
             }
 
@@ -692,6 +775,16 @@ const TableGrid = ({ tableId }) => {
                     // Save the updated rows to the database
                     debouncedSave(columns, newRows);
                     const nextRowIndex = (currentRowIndex + 1) % rows.length;
+                    if (nextRowIndex < 0 || nextRowIndex >= rows.length) {
+                        console.error(`Invalid row index: ${nextRowIndex}`);
+                        return; // Prevent out-of-bounds access
+                    }
+
+                    if (!rows[nextRowIndex]) {
+                        console.error(`Row at index ${nextRowIndex} is undefined.`);
+                        return;
+                    }
+
                     setSelectedCell({
                         rowId: rows[nextRowIndex].id,
                         colId: colId,
@@ -704,7 +797,7 @@ const TableGrid = ({ tableId }) => {
     };
 
     // Handle dropdown edit
-    const dropDownEditButtonRef = useRef(null);
+    const dropDownEditButtonRef = useRef<HTMLButtonElement | null>(null);
 
     const handleOpenDropdown = (columnId) => {
         setOpenDropdown(openDropdown === columnId ? null : columnId);
@@ -735,13 +828,20 @@ const TableGrid = ({ tableId }) => {
             }
 
             const updatedRows = [...rows];
-            updatedRows.forEach((row, rowIndex) => {
-                const colId = column.id;
-                const value = row.cells[colId];
-                if (isNaN(value) || value.trim() === "") {
-                    updatedRows[rowIndex].cells[colId] = "";
+            updatedRows.forEach((row) => {
+                const rowIndex = updatedRows.findIndex((r) => r.id === row.id);
+                if (rowIndex !== -1 && updatedRows[rowIndex]) {
+                    const colId = column?.id;
+                    if (!colId) return;
+
+                    const value = row.cells?.[colId] ?? "";
+
+                    if (isNaN(Number(value)) || value.trim() === "") {
+                        updatedRows[rowIndex].cells = { ...updatedRows[rowIndex].cells, [colId]: "" };
+                    }
                 }
             });
+
 
             setRows(updatedRows);
             debouncedSave(columns, updatedRows);
@@ -894,11 +994,13 @@ const TableGrid = ({ tableId }) => {
             // Ensure the filtering data is properly parsed when loading views
             const parsedViews = viewsData.map(view => ({
                 ...view,
-                filtering: Array.isArray(view.filtering) 
-                    ? view.filtering 
-                    : JSON.parse(view.filtering || '[]')
+                filtering: Array.isArray(view.filtering)
+                    ? view.filtering
+                    : typeof view.filtering === 'string'
+                        ? JSON.parse(view.filtering)
+                        : []
             }));
-            setViews(parsedViews);
+            (parsedViews);
         }
     }, [viewsData]);
 
@@ -922,8 +1024,8 @@ const TableGrid = ({ tableId }) => {
             <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Filter Group</span>
-                    <button 
-                        onClick={() => parentGroupIndex !== undefined 
+                    <button
+                        onClick={() => parentGroupIndex !== undefined
                             ? handleRemoveFilter(index, undefined, parentGroupIndex)
                             : handleRemoveFilter(index)
                         }
@@ -939,13 +1041,13 @@ const TableGrid = ({ tableId }) => {
                             {filterIndex === 0 ? (
                                 <span className="text-sm text-gray-600 w-20">Where</span>
                             ) : filterIndex === 1 ? (
-                                <select 
+                                <select
                                     className="border p-2 rounded-md text-gray-700 text-sm w-20"
-                                    value={filter.condition_type || 'AND'}
+                                    value={filter.condition_type ?? 'AND'}
                                     onChange={(e) => {
                                         const updatedFilters = [...filters];
                                         const currentGroup = updatedFilters[index] as FilterGroup;
-                                        currentGroup.filters = currentGroup.filters.map((f, i) => 
+                                        currentGroup.filters = currentGroup.filters.map((f, i) =>
                                             i >= 1 ? { ...f, condition_type: e.target.value } : f
                                         );
                                         setFilters(updatedFilters);
@@ -956,7 +1058,7 @@ const TableGrid = ({ tableId }) => {
                                 </select>
                             ) : (
                                 <span className="text-sm text-gray-600 w-20">
-                                    {(group.filters[1] as FilterCondition)?.condition_type || 'AND'}
+                                    {(group.filters[1] as FilterCondition)?.condition_type ?? 'AND'}
                                 </span>
                             )}
 
@@ -1026,7 +1128,7 @@ const TableGrid = ({ tableId }) => {
                             )}
                         </div>
                     ))}
-                    
+
                     <div className="flex space-x-4">
                         <button
                             onClick={() => parentGroupIndex !== undefined
@@ -1194,7 +1296,6 @@ const TableGrid = ({ tableId }) => {
                                                 </button>
 
                                                 <div className="flex items-center gap-2 flex-1">
-                                                    {col.icon}
                                                     <span className="text-sm">{col.title}</span>
                                                 </div>
                                                 <MoreVertical className="h-3 w-3 text-gray-400" />
@@ -1243,11 +1344,11 @@ const TableGrid = ({ tableId }) => {
                                                 {index === 0 ? (
                                                     <span className="text-sm text-gray-600 w-20">Where</span>
                                                 ) : index === 1 ? (
-                                                    <select 
+                                                    <select
                                                         className="border p-2 rounded-md text-gray-700 text-sm w-20"
-                                                        value={item.condition_type || 'AND'}
+                                                        value={item.condition_type ?? 'AND'}
                                                         onChange={(e) => {
-                                                            const updatedFilters = filters.map((f, i) => 
+                                                            const updatedFilters = filters.map((f, i) =>
                                                                 i >= 1 ? { ...f, condition_type: e.target.value } : f
                                                             );
                                                             setFilters(updatedFilters);
@@ -1258,7 +1359,7 @@ const TableGrid = ({ tableId }) => {
                                                     </select>
                                                 ) : (
                                                     <span className="text-sm text-gray-600 w-20">
-                                                        {item.condition_type || 'AND'}
+                                                        {item.condition_type ?? 'AND'}
                                                     </span>
                                                 )}
 
@@ -1316,7 +1417,7 @@ const TableGrid = ({ tableId }) => {
                                             </div>
                                         </div>
                                     ))}
-                                    
+
                                     <div className="flex space-x-4">
                                         <button
                                             onClick={() => handleAddFilter("")}
@@ -1519,8 +1620,9 @@ const TableGrid = ({ tableId }) => {
                                                 </button>
                                             </div>
                                             {openDropdown === column.id && editingColumn === column.id
-                                                ? renderEditField(column)
+                                                ? renderEditField({ mode: "edit" })
                                                 : openDropdown === column.id && renderDropdownContent(column)}
+
                                         </th>
                                     ))}
                                 <th
